@@ -1,0 +1,60 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: webdev-shortener-redis
+    restart: unless-stopped
+    ports:
+      - "6385:6379"
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: webdev-shortener-postgres
+    restart: unless-stopped
+    ports:
+      - "5438:5432"
+    environment:
+      POSTGRES_DB: shortener
+      POSTGRES_USER: shortener
+      POSTGRES_PASSWORD: shortener_pass
+    volumes:
+      - shortener-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shortener"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    image: webdev-edge-shortener:latest
+    container_name: webdev-edge-shortener
+    restart: unless-stopped
+    ports:
+      - "3014:3014"
+    environment:
+      NODE_ENV: production
+      PORT: "3014"
+      BASE_URL: "https://short.davidfdzmorilla.dev"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: shortener
+      DB_USER: shortener
+      DB_PASS: shortener_pass
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      ADMIN_KEY: ${ADMIN_KEY:-platform-admin-key}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  shortener-pgdata:
+    driver: local
